@@ -19,6 +19,7 @@ module.exports = async (req, res) => {
     const u = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       headers: {
         Authorization: `Bearer ${token}`,
+        apikey: SERVICE_KEY,
       },
     });
     if (!u.ok) return res.status(401).json({ error: 'Invalid token' });
