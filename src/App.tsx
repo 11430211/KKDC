@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import supabase from './supabase';
 import ChangePassword from './ChangePassword';
 import { 
   Shield, 
@@ -867,8 +868,54 @@ export default function App() {
     return { groups: [], allMembers: [], bets: [], finalMatches: [] };
   });
 
+  // Supabase user state
+  const [sbUser, setSbUser] = useState<any>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session?.user) setSbUser(data.session.user);
+        // try to load remote data if user exists
+        if (data?.session?.access_token) {
+          const r = await fetch('/api/load', {
+            headers: { Authorization: `Bearer ${data.session.access_token}` },
+          });
+          if (r.ok) {
+            const j = await r.json();
+            if (j?.data?.content) {
+              setTournamentData(j.data.content);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('supabase session check failed', e);
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('chuni_tournament_data', JSON.stringify(tournamentData));
+
+    // If user logged in via Supabase, sync to serverless API
+    (async () => {
+      try {
+        const session = await supabase.auth.getSession();
+        const token = session?.data?.session?.access_token;
+        if (token) {
+          await fetch('/api/save', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ data: tournamentData }),
+          });
+        }
+      } catch (e) {
+        // ignore sync errors
+        console.error('Sync error', e);
+      }
+    })();
   }, [tournamentData]);
 
   // Sync Finals
@@ -931,6 +978,23 @@ export default function App() {
       setLoginError("");
     } else {
       setLoginError("密碼錯誤，凡人不可窺視深淵！");
+    }
+  };
+
+  // Supabase email sign-in (password)
+  const supabaseSignIn = async (email: string, password: string) => {
+    try {
+      const result = await supabase.auth.signInWithPassword({ email, password });
+      if (result.error) {
+        alert('Sign in error: ' + result.error.message);
+        return;
+      }
+      if (result.data?.session?.user) {
+        setSbUser(result.data.session.user);
+        setIsAdmin(true);
+      }
+    } catch (e: any) {
+      alert('Sign in failed: ' + e.message);
     }
   };
 
@@ -1283,7 +1347,7 @@ export default function App() {
                         animate={{ scale: 1, opacity: 1 }}
                         className="mb-12 bg-gradient-to-r from-amber-900/60 via-purple-900/60 to-amber-900/60 border-2 border-amber-500/50 rounded-[3rem] p-10 relative overflow-hidden group shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center"
                       >
-                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
+                        <div className="absolute inset-0 bg-gradient-to-br from-black/10 to-transparent opacity-20"></div>
                         <motion.div 
                           animate={{ rotate: [0, 5, -5, 0] }}
                           transition={{ repeat: Infinity, duration: 4 }}
